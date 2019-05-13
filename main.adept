@@ -1,0 +1,188 @@
+
+#set fullscreen_minesweeper true
+
+pragma no_type_info
+import 'captain_prototype/captain.adept'
+
+flag_img CaptTexture
+number_imgs 9 CaptTexture
+grid *Spot
+width usize
+height usize
+undiscovered_spots int
+message *CaptTexture
+minesweeper_img CaptTexture
+died_img CaptTexture
+won_img CaptTexture
+
+func main {
+    unless captPrepare(), return
+    captOnSetup(func &on_setup)
+    captOnClick(func &on_click, true)
+    captOnDraw(func &on_draw)
+    captOnExit(func &on_exit)
+    
+    #if !fullscreen_minesweeper
+    captCustomView(640.0f, 640.0f)
+    captResizable(false)
+    captStart('Minesweeper', 800, 800, false)
+    #else
+    captStart('Minesweeper', true)
+    #end
+}
+
+func on_setup {
+    captRandomize()
+    width = captViewWidth() as int / 32
+    height = captViewHeight() as int / 32
+    grid = new Spot * (width * height)
+    initGrid()
+    
+    repeat 9 {
+        number_filename 10 ubyte
+        sprintf(&number_filename as *ubyte, '%d.png', idx as int)
+        number_imgs[idx] = captTexture(&number_filename as *ubyte, false)
+    }
+    
+    flag_img = captTexture('flag.png', false)
+    minesweeper_img = captTexture('minesweeper.png', false)
+    died_img = captTexture('died.png', false)
+    won_img = captTexture('won.png', false)
+    message = &minesweeper_img
+}
+
+func on_click(mouse_x, mouse_y float, button int) {
+    if message, message = null
+
+    x int = mouse_x as int / 32
+    y int = mouse_y as int / 32
+    
+    if x < 0 || x >= width || y < 0 || y >= height, return
+    
+    if      button == 1, trigger(x, y)
+    else if button == 2, flag(x, y)
+    
+    if undiscovered_spots == 0,
+        message = &won_img; initGrid()
+}
+
+func on_draw {
+    captClearColor(captColor(1.0f, 1.0f, 1.0f))
+    
+    if message,
+        captDrawTexture(*message, captViewWidth() / 4.0f, captViewHeight() / 4.0f, captViewWidth() / 2.0f, captViewWidth() / 4.0f)
+    else
+        drawGrid()
+}
+
+func on_exit {
+    delete grid
+    flag_img.free()
+    repeat 9, number_imgs[idx].free()
+    minesweeper_img.free()
+    died_img.free()
+    won_img.free()
+}
+
+struct Spot (
+    is_bomb bool,
+    is_flagged bool,
+    is_visible bool,
+    value int
+)
+
+func initGrid int {
+    highest int = 0
+    bombs int = 0
+    
+    repeat height {
+        y usize = idx
+        repeat width {
+            x usize = idx
+            bomb bool = captRandom() < 0.1d
+            grid[y + x * height].is_bomb = bomb
+            grid[y + x * height].is_flagged = false
+            grid[y + x * height].is_visible = false
+            grid[y + x * height].value = -1
+            
+            if bomb, bombs += 1
+        }
+    }
+    
+    repeat height {
+        y usize = idx
+        repeat width {
+            x usize = idx
+
+            if grid[y + x * height].is_bomb, continue
+            
+            count int = 0
+            if x != 0,          if grid[y + (x - 1) * height].is_bomb, count += 1
+            if y != 0,          if grid[(y - 1) + x * height].is_bomb, count += 1
+            if x != width - 1,  if grid[y + (x + 1) * height].is_bomb, count += 1
+            if y != height - 1, if grid[(y + 1) + x * height].is_bomb, count += 1
+            
+            if x != 0 && y != 0,                  if grid[(y - 1) + (x - 1) * height].is_bomb, count += 1
+            if x != width - 1 && y != 0,          if grid[(y - 1) + (x + 1) * height].is_bomb, count += 1
+            if x != 0 && y != height - 1,         if grid[(y + 1) + (x - 1) * height].is_bomb, count += 1
+            if x != width - 1 && y != height - 1, if grid[(y + 1) + (x + 1) * height].is_bomb, count += 1
+            grid[y + x * height].value = count
+            
+            if highest < count, highest = count
+        }
+    }
+    
+    undiscovered_spots = (width * height) - bombs
+    return highest
+}
+
+func drawGrid {
+    repeat height {
+        y usize = idx
+        repeat width {
+            x usize = idx
+            grid[y + x * height].draw(x, y)
+        }
+    }
+}
+
+func draw(this *Spot, x, y int) {
+    if this.is_flagged {
+        captDrawTexture(flag_img, cast float x * 32.0f, cast float y * 32.0f, 32.0f, 32.0f)
+    } else if this.is_visible && !this.is_bomb {
+        captDrawTexture(number_imgs[this.value], cast float x * 32.0f, cast float y * 32.0f, 32.0f, 32.0f)
+    }
+}
+
+func trigger(x, y int) {
+    if x < 0 || x >= width || y < 0 || y >= height, return    
+    spot *Spot = &grid[y + x * height]
+    if spot.is_visible, return
+    
+    if spot.is_bomb {
+        message = &died_img
+        initGrid()
+        return
+    }
+    
+    spot.is_visible = true
+    spot.is_flagged = false
+    undiscovered_spots -= 1
+    
+    if spot.value == 0 {
+        trigger(x - 1, y)
+        trigger(x + 1, y)
+        trigger(x, y - 1)
+        trigger(x, y + 1)
+        trigger(x - 1, y - 1)
+        trigger(x - 1, y + 1)
+        trigger(x + 1, y - 1)
+        trigger(x + 1, y + 1)
+    }
+}
+
+func flag(x, y int) {
+    if x < 0 || x >= width || y < 0 || y >= height, return
+    spot *Spot = &grid[y + x * height]
+    unless spot.is_visible, spot.is_flagged = !spot.is_flagged
+}
