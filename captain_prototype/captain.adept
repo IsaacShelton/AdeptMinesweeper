@@ -27,6 +27,10 @@ _captain_view_height float
 _captain_custom_view bool
 _captain_resizable bool
 
+// Backport of DPI support
+_captain_xdpi float
+_captain_ydpi float
+
 func captPrepare successful {
     _captain_window = null
     _captain_setup = null
@@ -41,6 +45,11 @@ func captPrepare successful {
     _captain_view_height = 0.0f
     _captain_custom_view = false
     _captain_resizable = true
+
+    // Backport of DPI support
+    _captain_xdpi = 1.0
+    _captain_ydpi = 1.0
+
     return glfwInit() != 0
 }
 
@@ -134,7 +143,12 @@ func captStart(in title *ubyte, in width, height int, in fullscreen bool) {
         glfwGetFramebufferSize(_captain_window, &win_width, &win_height)
         glViewport(0, 0, win_width, win_height)
         _captain_display_ratio = cast float win_width / cast float win_height
-        
+
+        // Backport of DPI support
+        glfwGetWindowSize(_captain_window, undef real_win_width int, undef real_win_height int)
+        _captain_xdpi = win_width as float / real_win_width as float
+        _captain_ydpi = win_height as float / real_win_height as float
+         
         unless _captain_custom_view {
             _captain_view_width = 800.0f * _captain_display_ratio
             _captain_view_height = 800.0f
@@ -211,18 +225,26 @@ func captDefaultView {
 
 func captMouseFramePosition(out x, y *float) {
     glfwGetCursorPos(_captain_window, undef x_d double, undef y_d double)
-    *x = x_d as float
-    *y = y_d as float
+
+    // Backport of DPI support
+    *x = x_d as float * _captain_xdpi
+    *y = y_d as float * _captain_ydpi
 }
 
 func captMouseFramePosition(out x, y *double) {
     glfwGetCursorPos(_captain_window, x, y)
+
+    // Backport of DPI support
+    *x *= _captain_xdpi
+    *y *= _captain_ydpi
 }
 
 func captMouseViewPosition(out x, y *float) {
     glfwGetCursorPos(_captain_window, undef x_d double, undef y_d double)
-    *x = x_d as float * captViewWidth() / captFrameWidth() as float
-    *y = y_d as float * captViewHeight() / captFrameHeight() as float
+
+    // Backport of DPI support
+    *x = x_d as float * _captain_xdpi * captViewWidth() / captFrameWidth() as float
+    *y = y_d as float * _captain_ydpi * captViewHeight() / captFrameHeight() as float
 }
 
 func captResizable(resizable bool) {
