@@ -8,7 +8,7 @@ import 'stb/image.adept'
 import 'sys/ctime.adept'
 import 'sys/cstdio.adept'
 import 'sys/cstring.adept'
-import 'adept/math/Matrix4f.adept'
+import 'adept/math/matrix4f.adept'
 
 _captain_window *GLFWwindow
 _captain_setup func() void
